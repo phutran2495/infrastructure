@@ -49,4 +49,6 @@ operations/variable-scripts/variable.json
 # .tfstate files
 *.tfstate
 *.tfstate.*
+
 infrastructure/Terraform/.terraform/*
+
