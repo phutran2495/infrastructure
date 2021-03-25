@@ -1,0 +1,7 @@
+AWS_REGION = "us-east-1"
+AMI = "ami-0a8db5b788d46e2d8"
+BUCKETNAME= "webapp.phu.tran"
+DB_USERNAME= "csye6225"
+DB_PASSWORD= "Edward123"
+zone_id = "Z03236821BAHL5I9KRUDM"
+domain_name = "prod.phutran.me"

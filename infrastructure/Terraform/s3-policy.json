@@ -1,0 +1,51 @@
+{
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Sid" : "ListObjectsInBucket",
+        "Effect" : "Allow",
+        "Action" : ["s3:ListBucket"],
+        "Resource" : ["arn:aws:s3:::webapp.phu.tran"]
+      },
+      {
+        "Sid" : "AllObjectActions",
+        "Effect" : "Allow",
+        "Action" : "s3:*Object",
+        "Resource" : ["arn:aws:s3:::webapp.phu.tran/*"]
+      },
+      {
+        "Sid" : "AllBucketActions",
+        "Effect" : "Allow",
+        "Action" : "s3:*Bucket",
+        "Resource" : [
+          "arn:aws:s3:::webapp.phu.tran",
+          "arn:aws:s3:::webapp.phu.tran/*"
+        ]
+      },
+      {
+        "Sid" : "codedeployBucketActions",
+        "Effect" : "Allow",
+        "Action" : "s3:*Bucket",
+        "Resource" : [
+          "arn:aws:s3:::codedeploy.phu.tran",
+          "arn:aws:s3:::codedeploy.phu.tran/*"
+        ]
+      },
+      {
+        "Sid" : "codedeployObjectActions",
+        "Effect" : "Allow",
+        "Action" : "s3:*Object",
+        "Resource" : ["arn:aws:s3:::codedeploy.phu.tran/*"]
+      },
+
+
+
+      
+      {
+        "Effect": "Allow",
+        "Action": "*",
+        "Resource": "*"
+      }
+      
+    ]
+  }
