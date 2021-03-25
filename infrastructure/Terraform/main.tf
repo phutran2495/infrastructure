@@ -290,7 +290,7 @@ resource "aws_iam_role" "ec2-role" {
 resource "aws_iam_policy" "s3-policy" {
   name        = "s3-policy"
   description = "Policy to allow services to access S3 bucket"
-  policy      = file("s3-policy.json")
+  policy      = file("s3-cloudwatch-policy.json")
 }
 
 # 13. Attach policy to role created
@@ -315,7 +315,7 @@ resource "aws_instance" "webapp"{
   ami                         = var.AMI
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.main-public-1.id
-  #depends_on                  = [aws_db_instance.mysql]
+  depends_on                  = [aws_db_instance.mysql]
   vpc_security_group_ids      = [aws_security_group.application.id]
   key_name                    = aws_key_pair.csyekeypair.key_name
   associate_public_ip_address = true
@@ -339,6 +339,14 @@ resource "aws_instance" "webapp"{
   tags = {
     Name = "cicd"
   }
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  name    = var.domain_name
+  type    = "A"
+  ttl     = "60"
+  records = [aws_instance.webapp.public_ip]
 }
 
 
