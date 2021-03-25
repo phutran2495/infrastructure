@@ -37,10 +37,7 @@
         "Action" : "s3:*Object",
         "Resource" : ["arn:aws:s3:::codedeploy.phu.tran/*"]
       },
-
-
-
-      
+     
       {
         "Effect": "Allow",
         "Action": "*",
