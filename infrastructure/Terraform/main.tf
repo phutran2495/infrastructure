@@ -87,9 +87,15 @@ resource "aws_security_group" "application" {
   name        = "app-security-group"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
+   ingress {
     from_port   = 22
     to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+    ingress {
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -348,6 +354,127 @@ resource "aws_route53_record" "www" {
   ttl     = "60"
   records = [aws_instance.webapp.public_ip]
 }
+
+
+
+
+
+resource "aws_lb" "webapplb" {
+  name               = "webapplb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.application.id]
+  subnets            = [aws_subnet.main-public-1.id,aws_subnet.main-public-2.id,aws_subnet.main-public-3 ]
+  tags = {
+    Name = "webapplb"
+  }
+}
+
+
+resource "aws_lb_target_group" "webapptg" {
+  name = "webapptg"
+  port = 8000
+  protocol = "HTTP"
+  vpc_id = aws_vpc.main.id
+}
+
+
+resource "aws_lb_listener" "webapplblistener" {
+  load_balancer_arn = aws_lb.webapplb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.webapptg.arn
+  }
+}
+
+
+
+resource "aws_launch_configuration" "webapp_lc"{
+  name = "webapp-lc"
+  image_id = "value"
+  instance_type = "value"
+  iam_instance_profile = "value"
+  security_groups = [ "value" ]
+  associate_public_ip_address = true
+  key_name = "value"
+  user_data = "value"
+}
+
+resource "aws_autoscaling_group" "webapp_asg" {
+  launch_template {
+    id = aws_launch_template.launch_template.id
+    version = aws_launch_template.launch_template.latest_version
+  }
+  name = webapp_asg
+  desired_capacity = 3
+  max_size = 5
+  min_size = 3
+  health_check_grace_period = 500
+
+}
+
+resource "aws_autoscaling_policy" "scale_up_policy" {
+  name = var.asg_policy_config.scale_up_policy_name
+  scaling_adjustment = var.asg_policy_config.scale_up_adjustment
+  adjustment_type = var.asg_policy_config.adjustment_type
+  cooldown = var.asg_policy_config.cooldown
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_autoscaling_policy" "scale_down_policy" {
+  name = var.asg_policy_config.scale_down_policy_name
+  scaling_adjustment = var.asg_policy_config.scale_down_adjustemnt
+  adjustment_type = var.asg_policy_config.adjustment_type
+  cooldown = var.asg_policy_config.cooldown
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
+  alarm_name = var.cloudwatch_alarm_config.scale_up_alarm_name
+  comparison_operator = var.cloudwatch_alarm_config.scale_up_comparison_operator
+  evaluation_periods = var.cloudwatch_alarm_config.evaluation_periods
+  metric_name = var.cloudwatch_alarm_config.metric_name
+  namespace = var.cloudwatch_alarm_config.namespace
+  period = var.cloudwatch_alarm_config.period
+  statistic = var.cloudwatch_alarm_config.statistic
+  threshold = var.cloudwatch_alarm_config.scale_up_cpu_threshold
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.scaling_group_from_terraform.name
+  }
+
+  alarm_description = var.cloudwatch_alarm_config.scale_up_description
+  alarm_actions = [aws_autoscaling_policy.scale_up_policy.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
+  alarm_name = var.cloudwatch_alarm_config.scale_down_alarm_name
+  comparison_operator = var.cloudwatch_alarm_config.scale_down_comparison_operator
+  evaluation_periods = var.cloudwatch_alarm_config.evaluation_periods
+  metric_name = var.cloudwatch_alarm_config.metric_name
+  namespace = var.cloudwatch_alarm_config.namespace
+  period = var.cloudwatch_alarm_config.period
+  statistic = var.cloudwatch_alarm_config.statistic
+  threshold = var.cloudwatch_alarm_config.scale_down_cpu_threshold
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.scaling_group_from_terraform.name
+  }
+
+  alarm_description = var.cloudwatch_alarm_config.scale_down_description
+  alarm_actions = [aws_autoscaling_policy.scale_down_policy.arn]
+}
+
+
+resource "aws_autoscaling_attachment" "asg_attachment" {
+  autoscaling_group_name = aws_autoscaling_group.scaling_group_from_terraform.id
+  alb_target_group_arn   = aws_lb_target_group.lb_target_group.arn
+}
+
+
 
 
 output "rds-ip" {
