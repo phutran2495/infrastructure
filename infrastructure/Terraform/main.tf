@@ -23,13 +23,13 @@ resource "aws_subnet" "main-public-1" {
   }
 }
 
-resource "aws_subnet" "main_public-2" {
+resource "aws_subnet" "main-public-2" {
   vpc_id  = aws_vpc.main.id
   cidr_block = "10.0.2.0/24"
   map_public_ip_on_launch = true
   availability_zone = "us-east-1b"
   tags = {
-    Name = "csye6225-main_public-2"
+    Name = "csye6225-main-public-2"
   }
 }
 
@@ -71,7 +71,7 @@ resource "aws_route_table_association" "custom-rt-association-2" {
 
   route_table_id = aws_route_table.r.id
 
-  subnet_id = aws_subnet.main_public-2.id
+  subnet_id = aws_subnet.main-public-2.id
 
 }
 
@@ -148,7 +148,7 @@ resource "aws_security_group" "database" {
 
 resource "aws_db_subnet_group" "database-sn" {
   name = "main"
-  subnet_ids =[aws_subnet.main_public-2.id, aws_subnet.main-public-3.id]
+  subnet_ids =[aws_subnet.main-public-2.id, aws_subnet.main-public-3.id]
 }
 
 
@@ -268,7 +268,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-deployment-group" {
   app_name               = aws_codedeploy_app.csye6225-webapp.name
   deployment_group_name  = "csye6225-webapp-deployment"
   service_role_arn       = aws_iam_role.CodeDeployServiceRole.arn
-  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  deployment_config_name = "CodeDeployDefault.OneAtATime"
   deployment_style {
     deployment_type = "IN_PLACE"
   }
@@ -316,7 +316,7 @@ resource "aws_key_pair" "csyekeypair" {
   public_key = "${file("~/csyekeypair.pub")}"
 }
 
-
+/*
 resource "aws_instance" "webapp"{
   ami                         = var.AMI
   instance_type               = "t2.micro"
@@ -354,20 +354,14 @@ resource "aws_route53_record" "www" {
   ttl     = "60"
   records = [aws_instance.webapp.public_ip]
 }
-
-
-
-
+*/
 
 resource "aws_lb" "webapplb" {
   name               = "webapplb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.application.id]
-  subnets            = [aws_subnet.main-public-1.id,aws_subnet.main-public-2.id,aws_subnet.main-public-3 ]
-  tags = {
-    Name = "webapplb"
-  }
+  subnets            = [aws_subnet.main-public-1.id, aws_subnet.main-public-2.id, aws_subnet.main-public-3.id ]
 }
 
 
@@ -376,6 +370,10 @@ resource "aws_lb_target_group" "webapptg" {
   port = 8000
   protocol = "HTTP"
   vpc_id = aws_vpc.main.id
+  health_check {
+    path = "/books"
+    port = 8000
+  }
 }
 
 
@@ -391,28 +389,46 @@ resource "aws_lb_listener" "webapplblistener" {
 }
 
 
-
 resource "aws_launch_configuration" "webapp_lc"{
   name = "webapp-lc"
-  image_id = "value"
-  instance_type = "value"
-  iam_instance_profile = "value"
-  security_groups = [ "value" ]
+  image_id = var.AMI
+  instance_type               = "t2.micro"
+  iam_instance_profile = aws_iam_instance_profile.ec2-profile.name
+  security_groups = [aws_security_group.application.id]
   associate_public_ip_address = true
-  key_name = "value"
-  user_data = "value"
+  root_block_device  {
+    volume_size                = 20
+    volume_type                = "gp2"
+    delete_on_termination      = true
+  }
+  key_name                    = aws_key_pair.csyekeypair.key_name
+  user_data            = <<-EOF
+                          #!/bin/bash
+                          sudo echo "#!/bin/bash" > /etc/profile.d/envvars.sh
+                          sudo echo "export dbusername=${var.DB_USERNAME} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export dbpassword=${var.DB_PASSWORD} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export bucketname=${var.BUCKETNAME} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export dbendpoint=${aws_db_instance.mysql.endpoint} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export bucketregion=${var.AWS_REGION} ">> /etc/profile.d/envvars.sh
+                          chmod +x /etc/profile.d/envvars.sh
+
+                        EOF
+ 
 }
 
 resource "aws_autoscaling_group" "webapp_asg" {
-  launch_template {
-    id = aws_launch_template.launch_template.id
-    version = aws_launch_template.launch_template.latest_version
-  }
-  name = webapp_asg
+  name = "webapp_asg"
   desired_capacity = 3
   max_size = 5
   min_size = 3
   health_check_grace_period = 500
+  launch_configuration = aws_launch_configuration.webapp_lc.name
+  vpc_zone_identifier = [ aws_subnet.main-public-1.id,aws_subnet.main-public-2.id, aws_subnet.main-public-3.id ]
+  tag {
+    key                 = "Name"
+    value               = "cicd"
+    propagate_at_launch = true
+  }
 
 }
 
@@ -443,7 +459,7 @@ resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
   threshold = var.cloudwatch_alarm_config.scale_up_cpu_threshold
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.scaling_group_from_terraform.name
+    AutoScalingGroupName = aws_autoscaling_group.webapp_asg.name
   }
 
   alarm_description = var.cloudwatch_alarm_config.scale_up_description
@@ -461,7 +477,7 @@ resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
   threshold = var.cloudwatch_alarm_config.scale_down_cpu_threshold
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.scaling_group_from_terraform.name
+    AutoScalingGroupName = aws_autoscaling_group.webapp_asg.name
   }
 
   alarm_description = var.cloudwatch_alarm_config.scale_down_description
@@ -470,11 +486,21 @@ resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
 
 
 resource "aws_autoscaling_attachment" "asg_attachment" {
-  autoscaling_group_name = aws_autoscaling_group.scaling_group_from_terraform.id
-  alb_target_group_arn   = aws_lb_target_group.lb_target_group.arn
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.id
+  alb_target_group_arn   = aws_lb_target_group.webapptg.arn
 }
 
+resource "aws_route53_record" "route53_record" {
+  zone_id=var.zone_id
+  name=var.domain_name
+  type="A"
 
+  alias {
+    name = aws_lb.webapplb.dns_name
+    zone_id = aws_lb.webapplb.zone_id
+    evaluate_target_health = true
+  }
+}
 
 
 output "rds-ip" {
@@ -482,6 +508,8 @@ output "rds-ip" {
 }
 
 
-output "ec2-ip"{
-  value = aws_instance.webapp.public_ip
-}
+#output "ec2-ip"{
+#  value = aws_instance.webapp.public_ip
+#}
+
+
