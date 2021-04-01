@@ -273,6 +273,12 @@ resource "aws_codedeploy_deployment_group" "csye6225-deployment-group" {
     deployment_type = "IN_PLACE"
   }
 
+  load_balancer_info {
+    target_group_info {
+      name = aws_lb_target_group.webapptg.name
+    }
+  }
+
   ec2_tag_filter {
     key   = "Name"
     type  = "KEY_AND_VALUE"
@@ -393,7 +399,7 @@ resource "aws_launch_configuration" "webapp_lc"{
   name = "webapp-lc"
   image_id = var.AMI
   instance_type               = "t2.micro"
-  iam_instance_profile = aws_iam_instance_profile.ec2-profile.name
+  iam_instance_profile =      aws_iam_instance_profile.ec2-profile.name
   security_groups = [aws_security_group.application.id]
   associate_public_ip_address = true
   root_block_device  {
@@ -421,7 +427,7 @@ resource "aws_autoscaling_group" "webapp_asg" {
   desired_capacity = 3
   max_size = 5
   min_size = 3
-  health_check_grace_period = 500
+  health_check_grace_period = 900
   launch_configuration = aws_launch_configuration.webapp_lc.name
   vpc_zone_identifier = [ aws_subnet.main-public-1.id,aws_subnet.main-public-2.id, aws_subnet.main-public-3.id ]
   tag {
