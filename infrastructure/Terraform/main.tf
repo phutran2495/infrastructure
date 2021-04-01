@@ -23,13 +23,13 @@ resource "aws_subnet" "main-public-1" {
   }
 }
 
-resource "aws_subnet" "main_public-2" {
+resource "aws_subnet" "main-public-2" {
   vpc_id  = aws_vpc.main.id
   cidr_block = "10.0.2.0/24"
   map_public_ip_on_launch = true
   availability_zone = "us-east-1b"
   tags = {
-    Name = "csye6225-main_public-2"
+    Name = "csye6225-main-public-2"
   }
 }
 
@@ -71,7 +71,7 @@ resource "aws_route_table_association" "custom-rt-association-2" {
 
   route_table_id = aws_route_table.r.id
 
-  subnet_id = aws_subnet.main_public-2.id
+  subnet_id = aws_subnet.main-public-2.id
 
 }
 
@@ -87,9 +87,15 @@ resource "aws_security_group" "application" {
   name        = "app-security-group"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
+   ingress {
     from_port   = 22
     to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+    ingress {
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -142,7 +148,7 @@ resource "aws_security_group" "database" {
 
 resource "aws_db_subnet_group" "database-sn" {
   name = "main"
-  subnet_ids =[aws_subnet.main_public-2.id, aws_subnet.main-public-3.id]
+  subnet_ids =[aws_subnet.main-public-2.id, aws_subnet.main-public-3.id]
 }
 
 
@@ -262,9 +268,15 @@ resource "aws_codedeploy_deployment_group" "csye6225-deployment-group" {
   app_name               = aws_codedeploy_app.csye6225-webapp.name
   deployment_group_name  = "csye6225-webapp-deployment"
   service_role_arn       = aws_iam_role.CodeDeployServiceRole.arn
-  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  deployment_config_name = "CodeDeployDefault.OneAtATime"
   deployment_style {
     deployment_type = "IN_PLACE"
+  }
+
+  load_balancer_info {
+    target_group_info {
+      name = aws_lb_target_group.webapptg.name
+    }
   }
 
   ec2_tag_filter {
@@ -310,7 +322,7 @@ resource "aws_key_pair" "csyekeypair" {
   public_key = "${file("~/csyekeypair.pub")}"
 }
 
-
+/*
 resource "aws_instance" "webapp"{
   ami                         = var.AMI
   instance_type               = "t2.micro"
@@ -349,12 +361,163 @@ resource "aws_route53_record" "www" {
   records = [aws_instance.webapp.public_ip]
 }
 
+*/
+
+resource "aws_lb" "webapplb" {
+  name               = "webapplb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.application.id]
+  subnets            = [aws_subnet.main-public-1.id, aws_subnet.main-public-2.id, aws_subnet.main-public-3.id ]
+}
+
+
+resource "aws_lb_target_group" "webapptg" {
+  name = "webapptg"
+  port = 8000
+  protocol = "HTTP"
+  vpc_id = aws_vpc.main.id
+  health_check {
+    path = "/books"
+    port = 8000
+  }
+}
+
+
+resource "aws_lb_listener" "webapplblistener" {
+  load_balancer_arn = aws_lb.webapplb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.webapptg.arn
+  }
+}
+
+
+resource "aws_launch_configuration" "webapp_lc"{
+  name = "webapp-lc"
+  image_id = var.AMI
+  instance_type               = "t2.micro"
+  iam_instance_profile =      aws_iam_instance_profile.ec2-profile.name
+  security_groups = [aws_security_group.application.id]
+  associate_public_ip_address = true
+  root_block_device  {
+    volume_size                = 20
+    volume_type                = "gp2"
+    delete_on_termination      = true
+  }
+  key_name                    = aws_key_pair.csyekeypair.key_name
+  user_data            = <<-EOF
+                          #!/bin/bash
+                          sudo echo "#!/bin/bash" > /etc/profile.d/envvars.sh
+                          sudo echo "export dbusername=${var.DB_USERNAME} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export dbpassword=${var.DB_PASSWORD} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export bucketname=${var.BUCKETNAME} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export dbendpoint=${aws_db_instance.mysql.endpoint} ">> /etc/profile.d/envvars.sh
+                          sudo echo "export bucketregion=${var.AWS_REGION} ">> /etc/profile.d/envvars.sh
+                          chmod +x /etc/profile.d/envvars.sh
+
+                        EOF
+ 
+}
+
+resource "aws_autoscaling_group" "webapp_asg" {
+  name = "webapp_asg"
+  desired_capacity = 3
+  max_size = 5
+  min_size = 3
+  health_check_grace_period = 900
+  launch_configuration = aws_launch_configuration.webapp_lc.name
+  vpc_zone_identifier = [ aws_subnet.main-public-1.id,aws_subnet.main-public-2.id, aws_subnet.main-public-3.id ]
+  tag {
+    key                 = "Name"
+    value               = "cicd"
+    propagate_at_launch = true
+  }
+
+}
+
+resource "aws_autoscaling_policy" "scale_up_policy" {
+  name = var.asg_policy_config.scale_up_policy_name
+  scaling_adjustment = var.asg_policy_config.scale_up_adjustment
+  adjustment_type = var.asg_policy_config.adjustment_type
+  cooldown = var.asg_policy_config.cooldown
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_autoscaling_policy" "scale_down_policy" {
+  name = var.asg_policy_config.scale_down_policy_name
+  scaling_adjustment = var.asg_policy_config.scale_down_adjustemnt
+  adjustment_type = var.asg_policy_config.adjustment_type
+  cooldown = var.asg_policy_config.cooldown
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_up_alarm" {
+  alarm_name = var.cloudwatch_alarm_config.scale_up_alarm_name
+  comparison_operator = var.cloudwatch_alarm_config.scale_up_comparison_operator
+  evaluation_periods = var.cloudwatch_alarm_config.evaluation_periods
+  metric_name = var.cloudwatch_alarm_config.metric_name
+  namespace = var.cloudwatch_alarm_config.namespace
+  period = var.cloudwatch_alarm_config.period
+  statistic = var.cloudwatch_alarm_config.statistic
+  threshold = var.cloudwatch_alarm_config.scale_up_cpu_threshold
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.webapp_asg.name
+  }
+
+  alarm_description = var.cloudwatch_alarm_config.scale_up_description
+  alarm_actions = [aws_autoscaling_policy.scale_up_policy.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "scale_down_alarm" {
+  alarm_name = var.cloudwatch_alarm_config.scale_down_alarm_name
+  comparison_operator = var.cloudwatch_alarm_config.scale_down_comparison_operator
+  evaluation_periods = var.cloudwatch_alarm_config.evaluation_periods
+  metric_name = var.cloudwatch_alarm_config.metric_name
+  namespace = var.cloudwatch_alarm_config.namespace
+  period = var.cloudwatch_alarm_config.period
+  statistic = var.cloudwatch_alarm_config.statistic
+  threshold = var.cloudwatch_alarm_config.scale_down_cpu_threshold
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.webapp_asg.name
+  }
+
+  alarm_description = var.cloudwatch_alarm_config.scale_down_description
+  alarm_actions = [aws_autoscaling_policy.scale_down_policy.arn]
+}
+
+
+resource "aws_autoscaling_attachment" "asg_attachment" {
+  autoscaling_group_name = aws_autoscaling_group.webapp_asg.id
+  alb_target_group_arn   = aws_lb_target_group.webapptg.arn
+}
+
+resource "aws_route53_record" "route53_record" {
+  zone_id=var.zone_id
+  name=var.domain_name
+  type="A"
+
+  alias {
+    name = aws_lb.webapplb.dns_name
+    zone_id = aws_lb.webapplb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+
 
 output "rds-ip" {
   value = aws_db_instance.mysql.endpoint
 }
 
 
-output "ec2-ip"{
-  value = aws_instance.webapp.public_ip
-}
+#output "ec2-ip"{
+#  value = aws_instance.webapp.public_ip
+#}
+
+
