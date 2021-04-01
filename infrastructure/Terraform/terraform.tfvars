@@ -1,5 +1,5 @@
 AWS_REGION = "us-east-1"
-AMI = "ami-064cd909cad7d9fb9"
+AMI = "ami-0404f0f8544d24164"
 BUCKETNAME= "webapp.phu.tran"
 DB_USERNAME= "csye6225"
 DB_PASSWORD= "Edward123"
