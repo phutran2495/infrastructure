@@ -360,6 +360,7 @@ resource "aws_route53_record" "www" {
   ttl     = "60"
   records = [aws_instance.webapp.public_ip]
 }
+
 */
 
 resource "aws_lb" "webapplb" {
@@ -507,6 +508,7 @@ resource "aws_route53_record" "route53_record" {
     evaluate_target_health = true
   }
 }
+
 
 
 output "rds-ip" {
