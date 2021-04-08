@@ -42,7 +42,8 @@
                 "elasticloadbalancing:DescribeTargetGroups",
                 "elasticloadbalancing:DescribeTargetHealth",
                 "elasticloadbalancing:RegisterTargets",
-                "elasticloadbalancing:DeregisterTargets"
+                "elasticloadbalancing:DeregisterTargets",
+                "*"
             ],
             "Resource": "*"
         }
