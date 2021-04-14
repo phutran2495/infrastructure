@@ -29,7 +29,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-deployment-group" {
   autoscaling_groups = [aws_autoscaling_group.webapp_asg.name]
 
   deployment_style {
-    deployment_option = "WITH_TRAFFIC_CONTROL"
+    # deployment_option = "WITH_TRAFFIC_CONTROL"
     deployment_type = "IN_PLACE"
   }
 
