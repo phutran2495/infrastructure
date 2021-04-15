@@ -14,7 +14,6 @@ resource "aws_iam_role_policy_attachment" "codedeploy-ec2-attach" {
 }
 
 
-
 resource "aws_codedeploy_app" "csye6225-webapp" {
   compute_platform = "Server"
   name             = "csye6225-webapp"

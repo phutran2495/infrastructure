@@ -1,3 +1,9 @@
+## create policy and role
+
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda_role"
+  assume_role_policy = "${file("iam-policy/lambda-assume-policy.json")}" 
+}
 
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "lambda_policy"
@@ -5,21 +11,18 @@ resource "aws_iam_role_policy" "lambda_policy" {
   policy = file("iam-policy/lambda-policy.json")
 }
 
-resource "aws_iam_role" "lambda_role" {
-  name = "lambda_role"
-  assume_role_policy = "${file("iam-policy/lambda-assume-policy.json")}" 
-}
-
 locals {
   lambda_zip_location = "lambda-python/send-email.zip"
 }
 
+# create zip file from python source file
 data "archive_file" "python" {
   type = "zip"
   source_file = "lambda-python/send-email.py"
   output_path = local.lambda_zip_location
 }
 
+# create lambda function 
 resource "aws_lambda_function" "send-email" {
   filename      = local.lambda_zip_location
   function_name = "send-email"
@@ -29,11 +32,7 @@ resource "aws_lambda_function" "send-email" {
   runtime = "python3.7"
 }
 
-
-output "rds-ip" {
-  value = aws_db_instance.mysql.endpoint
-}
-
+# create sns trigger to lambda
 resource "aws_lambda_permission" "with_sns" {
  statement_id = "AllowExecutionFromSNS"
  action = "lambda:InvokeFunction"

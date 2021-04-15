@@ -1,0 +1,23 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Enable IAM User Permissions",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::709891834787:root"
+            },
+            "Action": "kms:*",
+            "Resource": "*"
+        },
+        {
+            "Sid": "Add service role",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::709891834787:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+            },
+            "Action": "kms:*",
+            "Resource": "*"
+        }
+    ]
+}
