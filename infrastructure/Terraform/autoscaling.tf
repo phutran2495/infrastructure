@@ -1,5 +1,4 @@
 
-# 11. Create IAM Role
 resource "aws_iam_role" "ec2-role" {
   name               = "ec2-role"
   description        = "IAM role for webapp ec2 instance"
@@ -38,6 +37,14 @@ resource "aws_launch_configuration" "webapp_lc"{
   iam_instance_profile =      aws_iam_instance_profile.ec2-profile.name
   security_groups = [aws_security_group.application.id]
   associate_public_ip_address = true
+  
+  ebs_block_device {
+    device_name = "/dev/sda2"
+    volume_size                = 20
+    volume_type                = "gp2"
+    encrypted = true
+  }
+
   root_block_device  {
     volume_size                = 20
     volume_type                = "gp2"
@@ -60,7 +67,7 @@ resource "aws_launch_configuration" "webapp_lc"{
 
 resource "aws_autoscaling_group" "webapp_asg" {
   name = "webapp_asg"
-  desired_capacity = 3
+  desired_capacity = 2
   max_size = 5
   min_size = 2
   health_check_grace_period = 500
